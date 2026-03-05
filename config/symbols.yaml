@@ -1,0 +1,28 @@
+universe:
+  - symbol: "600519.SH"
+    name: "贵州茅台"
+    market: cn-a
+    sector: "白酒"
+    weight: 0.4
+  - symbol: "300750.SZ"
+    name: "宁德时代"
+    market: cn-a
+    sector: "新能源"
+    weight: 0.3
+  - symbol: "000858.SZ"
+    name: "五粮液"
+    market: cn-a
+    sector: "白酒"
+    weight: 0.3
+
+sectors:
+  - name: "白酒"
+    proxy_index: "BK0477"
+    members: ["600519.SH", "000858.SZ", "000568.SZ"]
+  - name: "新能源"
+    proxy_index: "BK0478"
+    members: ["300750.SZ", "002594.SZ", "601012.SH"]
+
+benchmark:
+  symbol: "000300.SH"
+  name: "沪深300"

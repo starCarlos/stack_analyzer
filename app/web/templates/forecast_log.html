@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block title %}预测记录{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-4">预测记录</h1>
+<pre class="card">{{ forecasts | tojson(indent=2) }}</pre>
+{% endblock %}

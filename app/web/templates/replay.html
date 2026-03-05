@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}历史回放{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-4">历史回放</h1>
+<ul class="space-y-2">
+    {% for item in sessions %}
+    <li class="card">会话 {{ item.session_id }} | {{ item.period }} | hit_rate={{ item.hit_rate }}</li>
+    {% endfor %}
+</ul>
+{% endblock %}

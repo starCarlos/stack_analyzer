@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block title %}板块详情{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-4">板块详情 {{ name }}</h1>
+<pre class="card">{{ analysis | tojson(indent=2) }}</pre>
+{% endblock %}

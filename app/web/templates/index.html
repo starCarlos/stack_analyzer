@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+{% block title %}首页 - A股智能投研系统{% endblock %}
+{% block content %}
+<section class="card mb-4">
+    <h2 class="font-semibold mb-2">🌡️ 市场温度计（3秒总览）</h2>
+    <div class="grid md:grid-cols-6 gap-2 text-sm">
+        {% for m in market_thermometer %}
+        <div class="rounded border border-gray-800 p-2 bg-gray-900">
+            <div class="text-gray-400">{{ m.name }}</div>
+            <div class="font-semibold">{{ m.value }}{{ m.unit if m.unit in ['亿', '%'] else '' }}</div>
+            <div class="{{ 'text-emerald-400' if m.change_pct >= 0 else 'text-red-400' }}">
+                {{ '+' if m.change_pct >= 0 else '' }}{{ m.change_pct }}%
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+
+<div class="flex items-center justify-between mb-4">
+    <h1 class="text-2xl font-bold">今日预测总览</h1>
+    <button id="refresh-forecast-btn"
+            class="px-3 py-1 rounded bg-blue-600 hover:bg-blue-500 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            hx-get="/partials/forecast-section"
+            hx-target="#forecast-section"
+            hx-swap="outerHTML">
+        刷新预测
+    </button>
+</div>
+
+<script>
+    (function () {
+        const btn = document.getElementById("refresh-forecast-btn");
+        if (!btn) return;
+        document.body.addEventListener("htmx:beforeRequest", function (e) {
+            if (e.detail && e.detail.elt === btn) {
+                btn.disabled = true;
+                btn.dataset.oldText = btn.textContent;
+                btn.textContent = "刷新中...";
+            }
+        });
+        document.body.addEventListener("htmx:afterRequest", function (e) {
+            if (e.detail && e.detail.elt === btn) {
+                btn.disabled = false;
+                btn.textContent = btn.dataset.oldText || "刷新预测";
+            }
+        });
+    })();
+</script>
+
+{% include "_forecast_section.html" %}
+
+<div class="grid gap-4 mt-4">
+    <section class="card">
+        <h2 class="font-semibold mb-2">🎯 个股可执行建议（入场/止盈/止损/仓位）</h2>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                <tr class="text-gray-400">
+                    <th class="text-left">标的</th><th class="text-left">入场价</th><th class="text-left text-emerald-400">止盈价</th>
+                    <th class="text-left text-red-400">止损价</th><th class="text-left">建议仓位</th><th class="text-left">操作建议</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for c in buy_stock_candidates %}
+                <tr class="border-t border-gray-800">
+                    <td class="py-1">{{ c.name }}（{{ c.symbol }}）</td>
+                    <td>{{ c.entry_price }}</td>
+                    <td class="text-emerald-400">{{ c.take_profit_price }}</td>
+                    <td class="text-red-400">{{ c.stop_loss_price }}</td>
+                    <td>{{ (c.suggested_position_pct * 100) | round(1) }}%</td>
+                    <td>
+                        <span class="px-2 py-0.5 rounded {{ 'bg-emerald-900 text-emerald-300' if c.confidence >= 0.68 else 'bg-yellow-900 text-yellow-300' }}">
+                            {{ '优先建仓' if c.confidence >= 0.68 else '小仓试探' }}
+                        </span>
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="card">
+        <h2 class="font-semibold mb-2">📈 板块可执行建议</h2>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                <tr class="text-gray-400">
+                    <th class="text-left">板块</th><th class="text-left">入场价</th><th class="text-left text-emerald-400">止盈价</th>
+                    <th class="text-left text-red-400">止损价</th><th class="text-left">建议仓位</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for c in buy_sector_candidates %}
+                <tr class="border-t border-gray-800">
+                    <td class="py-1">{{ c.name }}</td>
+                    <td>{{ c.entry_price }}</td>
+                    <td class="text-emerald-400">{{ c.take_profit_price }}</td>
+                    <td class="text-red-400">{{ c.stop_loss_price }}</td>
+                    <td>{{ (c.suggested_position_pct * 100) | round(1) }}%</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="card">
+        <h2 class="font-semibold mb-2">🌐 大盘执行建议</h2>
+        <div class="text-sm space-y-1">
+            <p>基准：{{ market_plan.benchmark }} | 方向：{{ market_plan.direction }} | 置信度：{{ (market_plan.confidence * 100) | round(0) }}%</p>
+            <p>建议动作：
+                <span class="px-2 py-0.5 rounded {{ 'bg-emerald-900 text-emerald-300' if market_plan.action=='加仓' else ('bg-red-900 text-red-300' if market_plan.action=='减仓' else 'bg-gray-800 text-gray-300') }}">
+                    {{ market_plan.action }}
+                </span>
+                ，目标总仓位 {{ (market_plan.target_position_pct * 100) | round(0) }}%
+            </p>
+            <p class="text-gray-400">加仓触发：{{ market_plan.trigger_add }}</p>
+            <p class="text-gray-400">减仓触发：{{ market_plan.trigger_reduce }}</p>
+        </div>
+    </section>
+
+    <section class="card">
+        <h2 class="font-semibold mb-2">🌍 今日外部事件影响表</h2>
+        <ul class="space-y-2 text-sm">
+            {% for e in cross_market_impact["items"] %}
+            <li class="border border-gray-800 rounded p-2 bg-gray-900">
+                <div><span class="text-gray-400">{{ e.region }}</span> | <span class="font-medium">{{ e.event }}</span></div>
+                <div class="mt-1">影响：<span class="{{ 'text-emerald-400' if '利好' in e.impact else 'text-yellow-300' }}">{{ e.impact }}</span></div>
+                <div>映射板块：{{ e.a_share_sectors | join(' / ') }}</div>
+                <div>映射标的：{{ e.a_share_symbols | join(' / ') }}</div>
+                <div class="text-gray-400">{{ e.reason }}</div>
+            </li>
+            {% endfor %}
+        </ul>
+    </section>
+
+    <section class="card">
+        <h2 class="font-semibold mb-2">📰 今日重要新闻</h2>
+        <ul class="space-y-1">
+            {% for item in top_news %}
+            <li id="news-{{ item.id }}">
+                • [{% if item.sentiment == "positive" %}利好{% elif item.sentiment == "negative" %}利空{% else %}中性{% endif %}] {{ item.title }}
+                <button class="ml-2 text-xs text-blue-300 hover:text-blue-200"
+                        hx-get="/api/news/{{ item.id }}/detail"
+                        hx-target="#news-{{ item.id }}"
+                        hx-swap="beforeend"
+                        onclick="this.disabled=true;this.classList.add('opacity-50');this.textContent='已展开';">
+                    展开分析
+                </button>
+            </li>
+            {% endfor %}
+        </ul>
+    </section>
+
+    <section class="card">
+        <h2 class="font-semibold mb-2">📝 学习报告摘要 + 今日优先级</h2>
+        <p>命中率：昨日 {{ (learning_report.evaluations.hit_rate_yesterday * 100) | round(0) | int }}%
+            / 本周 {{ (learning_report.evaluations.hit_rate_week * 100) | round(0) | int }}%
+            / 本月 {{ (learning_report.evaluations.hit_rate_month * 100) | round(0) | int }}%</p>
+        <p class="mt-1">最近参数调整: {{ learning_report.param_changes[0].change if learning_report.param_changes else "无" }}</p>
+        <p class="mt-1">纸面账户: 累计收益 {{ (paper_status.cumulative_return * 100) | round(2) }}% |
+            最大回撤 {{ (paper_status.max_drawdown * 100) | round(2) }}%</p>
+        <div class="mt-2 text-sm">
+            {% for p in learning_report.today_priorities %}
+            <div class="mt-1 p-2 rounded border border-gray-800 bg-gray-900">
+                <span class="px-1.5 py-0.5 rounded {{ 'bg-red-900 text-red-300' if p.level=='P0' else ('bg-yellow-900 text-yellow-300' if p.level=='P1' else 'bg-blue-900 text-blue-300') }}">{{ p.level }}</span>
+                {{ p.action }}｜{{ p.target }}（{{ p.reason }}）
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+</div>
+{% endblock %}

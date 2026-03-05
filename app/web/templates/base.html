@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}A股智能投研系统{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body class="bg-gray-950 text-gray-200 min-h-screen">
+<nav class="border-b border-gray-800 px-6 py-3 flex items-center justify-between">
+    <a href="/" class="text-lg font-bold text-white">📊 A股智能投研</a>
+    <div class="flex gap-4 text-sm">
+        <a href="/" class="hover:text-white">首页</a>
+        <a href="/news" class="hover:text-white">新闻</a>
+        <a href="/replay" class="hover:text-white">回放</a>
+        <a href="/forecast-log" class="hover:text-white">预测</a>
+        <a href="/learning" class="hover:text-white">学习</a>
+        <a href="/paper" class="hover:text-white">纸面</a>
+        <a href="/settings" class="hover:text-white">设置</a>
+    </div>
+</nav>
+<main class="max-w-6xl mx-auto px-6 py-6">
+    {% block content %}{% endblock %}
+</main>
+<div id="loading-bar" class="htmx-indicator fixed top-0 left-0 h-1 w-full bg-blue-500"></div>
+</body>
+</html>

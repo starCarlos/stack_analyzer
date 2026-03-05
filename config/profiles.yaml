@@ -1,0 +1,17 @@
+advisors:
+  - id: fundamental
+    name: "基本面分析师"
+    focus: "营收/利润/ROE/现金流，关注企业内在价值"
+  - id: technical
+    name: "技术面分析师"
+    focus: "K线形态/均线/MACD/RSI/成交量，关注趋势和买卖时机"
+  - id: policy
+    name: "政策分析师"
+    focus: "宏观政策/行业监管/财政货币政策"
+  - id: risk
+    name: "风险分析师"
+    focus: "下行风险/黑天鹅/财务造假/质押/减持/诉讼"
+
+consensus_rule:
+  min_agreement: 3
+  fallback: "hold"

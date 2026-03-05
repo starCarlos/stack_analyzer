@@ -1,0 +1,56 @@
+<div id="forecast-section" class="grid gap-4">
+    <div class="text-xs text-gray-400">最近刷新：{{ forecast_refreshed_at }}</div>
+    <section class="card">
+        <h2 class="font-semibold mb-2">📊 大盘预测</h2>
+        <p>沪深300: {{ "↑" if forecast_summary.market.direction == "up" else ("↓" if forecast_summary.market.direction == "down" else "→") }}
+            置信度 {{ (forecast_summary.market.confidence * 100) | round(0) | int }}%
+            预测5日收益 {{ (forecast_summary.market.predicted_return_5d * 100) | round(2) }}%</p>
+        <p class="text-sm text-gray-300 mt-1">
+            市场情绪: {{ forecast_summary.market.sentiment }} |
+            北向资金: +{{ forecast_summary.market.north_flow_amount }}亿 |
+            成交额: {{ forecast_summary.market.total_turnover_amount }}亿 |
+            MA20状态: {{ "上方" if forecast_summary.market.ma20_status == "above" else "下方" }}
+        </p>
+    </section>
+    <section class="card">
+        <h2 class="font-semibold mb-2">🎯 个股预测 TOP5</h2>
+        <table class="w-full text-sm">
+            <thead><tr><th class="text-left">标的</th><th class="text-left">代码</th><th class="text-left">方向</th><th class="text-left">置信度</th><th class="text-left">理由</th></tr></thead>
+            <tbody>
+            {% for item in forecast_summary.stocks[:5] %}
+                <tr>
+                    <td><a class="text-blue-300 hover:text-blue-200" href="/stock/{{ item.symbol }}">{{ item.name }}</a></td>
+                    <td>{{ item.symbol }}</td>
+                    <td>{{ "↑" if item.predicted_direction == "up" else ("↓" if item.predicted_direction == "down" else "→") }}</td>
+                    <td>{{ (item.confidence * 100) | round(0) | int }}%</td>
+                    <td>{{ item.reason }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </section>
+    <section class="card">
+        <h2 class="font-semibold mb-2">📈 板块预测</h2>
+        <p class="text-sm text-gray-300 mb-2">全板块覆盖：{{ forecast_summary.sectors.all | length }} 个（mode={{ forecast_summary.sectors.scope_mode }}）</p>
+        <p>
+            看好:
+            {% for s in forecast_summary.sectors.bullish %}
+            <span class="mr-2">{{ s.name }}({{ (s.confidence * 100) | round(0) | int }}%)</span>
+            {% endfor %}
+        </p>
+        <p class="mt-1">
+            看空:
+            {% for s in forecast_summary.sectors.bearish %}
+            <span class="mr-2">{{ s.name }}({{ (s.confidence * 100) | round(0) | int }}%)</span>
+            {% endfor %}
+        </p>
+        <div class="mt-2 text-sm">
+            全部：
+            {% for s in forecast_summary.sectors.all %}
+            <span class="mr-2">
+                {{ s.name }}{% if s.predicted_direction == "up" %}↑{% elif s.predicted_direction == "down" %}↓{% else %}→{% endif %}
+            </span>
+            {% endfor %}
+        </div>
+    </section>
+</div>

@@ -1,0 +1,24 @@
+price:
+  windows:
+  - 5
+  - 10
+  - 20
+  method: ensemble
+  weights:
+    momentum: 0.4
+    mean_reversion: 0.15
+    fundamental: 0.45
+sector:
+  windows:
+  - 10
+  - 20
+  enabled: true
+market:
+  benchmark: 000300.SH
+  windows:
+  - 5
+  - 10
+  features_extra:
+  - total_turnover
+  - north_flow_ma5
+  - advance_decline_ratio

@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}学习报告{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-4">学习报告</h1>
+<div class="grid gap-4">
+    <section class="card text-sm flex items-center justify-between">
+        <span>趋势方向：</span>
+        <div class="flex gap-2">
+            <a href="/learning?order=desc" class="px-2 py-1 rounded {{ 'bg-blue-600' if order == 'desc' else 'bg-gray-800' }}">最近在左</a>
+            <a href="/learning?order=asc" class="px-2 py-1 rounded {{ 'bg-blue-600' if order == 'asc' else 'bg-gray-800' }}">最近在右</a>
+        </div>
+    </section>
+    <pre class="card">{{ report | tojson(indent=2) }}</pre>
+    <section class="card">
+        <h2 class="font-semibold mb-2">流水线健康快照</h2>
+        <p>最近状态：{{ latest_run.status if latest_run else "暂无运行记录" }}</p>
+        <p>步骤数量：{{ latest_run.step_count if latest_run else "-" }}</p>
+        <p>质量检查：{{ latest_quality.overall_status if latest_quality else "未知" }}</p>
+        <p>容量状态：{{ latest_archive.capacity_status if latest_archive else "未知" }}（{{ latest_archive.capacity_mb if latest_archive else "-" }} MB）</p>
+    </section>
+    <section class="card">
+        <h2 class="font-semibold mb-2">最近7次趋势</h2>
+        <div class="grid md:grid-cols-3 gap-4 text-sm">
+            <div>
+                <h3 class="font-medium mb-1">质量趋势</h3>
+                <svg viewBox="0 0 220 64" class="w-full h-16 mb-2 bg-gray-900 rounded">
+                    <polyline fill="none" stroke="#10b981" stroke-width="2" points="{{ quality_line }}"></polyline>
+                    {% for d in quality_dots %}
+                    <circle cx="{{ d.x }}" cy="{{ d.y }}" r="2.5" fill="#10b981">
+                        <title>{{ d.label }}: {{ d.value }}</title>
+                    </circle>
+                    {% endfor %}
+                </svg>
+                <ul>
+                    {% for i in quality_points %}
+                    <li class="mb-2">
+                        <div class="flex justify-between"><span>{{ i.label }}</span><span>{{ i.status }}</span></div>
+                        <div class="w-full h-2 bg-gray-800 rounded">
+                            <div class="h-2 rounded {{ 'bg-emerald-500' if i.score >= 90 else 'bg-yellow-500' }}" style="width: {{ i.score }}%"></div>
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            <div>
+                <h3 class="font-medium mb-1">容量趋势</h3>
+                <svg viewBox="0 0 220 64" class="w-full h-16 mb-2 bg-gray-900 rounded">
+                    <polyline fill="none" stroke="#3b82f6" stroke-width="2" points="{{ capacity_line }}"></polyline>
+                    {% for d in capacity_dots %}
+                    <circle cx="{{ d.x }}" cy="{{ d.y }}" r="2.5" fill="#3b82f6">
+                        <title>{{ d.label }}: {{ d.value }}MB</title>
+                    </circle>
+                    {% endfor %}
+                </svg>
+                <ul>
+                    {% for i in capacity_points %}
+                    <li class="mb-2">
+                        <div class="flex justify-between"><span>{{ i.label }}</span><span>{{ i.value }}MB</span></div>
+                        <div class="w-full h-2 bg-gray-800 rounded">
+                            <div class="h-2 rounded bg-blue-500" style="width: {{ i.pct }}%"></div>
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            <div>
+                <h3 class="font-medium mb-1">一致性趋势</h3>
+                <svg viewBox="0 0 220 64" class="w-full h-16 mb-2 bg-gray-900 rounded">
+                    <polyline fill="none" stroke="#a855f7" stroke-width="2" points="{{ agreement_line }}"></polyline>
+                    {% for d in agreement_dots %}
+                    <circle cx="{{ d.x }}" cy="{{ d.y }}" r="2.5" fill="#a855f7">
+                        <title>{{ d.label }}: {{ (d.value * 100) | round(1) }}%</title>
+                    </circle>
+                    {% endfor %}
+                </svg>
+                <ul>
+                    {% for i in agreement_points %}
+                    <li class="mb-2">
+                        <div class="flex justify-between"><span>{{ i.label }}</span><span>{{ (i.value * 100) | round(1) }}%</span></div>
+                        <div class="w-full h-2 bg-gray-800 rounded">
+                            <div class="h-2 rounded bg-purple-500" style="width: {{ i.pct }}%"></div>
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </section>
+</div>
+{% endblock %}

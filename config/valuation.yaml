@@ -1,0 +1,8 @@
+valuation:
+  pe_percentile_low: 0.3
+  pb_percentile_low: 0.3
+  high_quality_roe: 0.15
+
+event_llm:
+  enabled: true
+  max_events_per_day: 20

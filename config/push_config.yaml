@@ -1,0 +1,7 @@
+enabled: false
+channels:
+  wecom:
+    webhook: ""
+  telegram:
+    bot_token: ""
+    chat_id: ""

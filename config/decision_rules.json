@@ -1,0 +1,18 @@
+{
+  "_comment": "硬性规则，不可被系统自动修改",
+  "position": {
+    "max_single_pct": 0.1,
+    "max_total_pct": 0.6,
+    "max_daily_buy_pct": 0.05
+  },
+  "filter": {
+    "exclude_st": true,
+    "min_listing_days": 365,
+    "min_market_cap_billion": 10
+  },
+  "stop_loss_pct": 0.08,
+  "market_brake": {
+    "benchmark_below_ma20_no_new_buy": true
+  },
+  "confidence_threshold": 0.6
+}
