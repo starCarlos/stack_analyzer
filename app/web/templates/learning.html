@@ -17,6 +17,18 @@
         <p>步骤数量：{{ latest_run.step_count if latest_run else "-" }}</p>
         <p>质量检查：{{ latest_quality.overall_status if latest_quality else "未知" }}</p>
         <p>容量状态：{{ latest_archive.capacity_status if latest_archive else "未知" }}（{{ latest_archive.capacity_mb if latest_archive else "-" }} MB）</p>
+        {% if latest_rollback %}
+        <div class="mt-2 p-2 rounded border border-red-700 bg-red-950 text-red-200 text-sm">
+            <div class="font-medium">⚠ 今日发生参数回滚</div>
+            <div>日期：{{ latest_rollback.change_date }}</div>
+            <div>原因：{{ latest_rollback.reason }}</div>
+            <div>变更项：
+                {% for c in latest_rollback.changes[:5] %}
+                    <span class="mr-2">{{ c.param_path }} {{ c.new_value }}→{{ c.old_value }}</span>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
     </section>
     <section class="card">
         <h2 class="font-semibold mb-2">最近7次趋势</h2>

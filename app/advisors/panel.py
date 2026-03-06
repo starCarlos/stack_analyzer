@@ -37,22 +37,26 @@ def _mock_role_judgement(symbol: str, role_id: str) -> dict:
 def role_agreement(votes: list[str]) -> float:
     if not votes:
         return 0.0
-    cnt = Counter(votes)
-    return max(cnt.values()) / len(votes)
+    effective = [v for v in votes if v and v != "neutral"]
+    if not effective:
+        return 0.0
+    cnt = Counter(effective)
+    return max(cnt.values()) / len(effective)
 
 
 def analyze_with_roles(symbol: str, min_agreement: float = 0.6) -> dict:
     role_outputs = [_mock_role_judgement(symbol, role["id"]) for role in ROLES]
     votes = [r["direction"] for r in role_outputs]
     agree = role_agreement(votes)
-    top_vote = Counter(votes).most_common(1)[0][0] if votes else "neutral"
+    effective = [v for v in votes if v and v != "neutral"]
+    top_vote = Counter(effective).most_common(1)[0][0] if effective else "neutral"
     final_direction = top_vote if agree >= min_agreement else "hold"
     return {
         "symbol": symbol,
         "date": str(date.today()),
         "roles": role_outputs,
         "role_agreement": round(agree, 4),
+        "effective_vote_count": len(effective),
         "consensus_direction": final_direction,
         "personas": PERSONAS,
     }
-

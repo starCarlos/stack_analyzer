@@ -41,6 +41,21 @@ def _build_trade_plan(symbol: str, confidence: float) -> dict:
     }
 
 
+def _apply_total_cap(candidates: list[dict], max_total_pct: float) -> tuple[list[dict], list[dict]]:
+    ordered = sorted(candidates, key=lambda x: float(x.get("confidence", 0)), reverse=True)
+    kept: list[dict] = []
+    dropped: list[dict] = []
+    used = 0.0
+    for c in ordered:
+        w = float(c.get("suggested_position_pct", 0.0))
+        if used + w <= max_total_pct + 1e-9:
+            kept.append(c)
+            used += w
+        else:
+            dropped.append(c)
+    return kept, dropped
+
+
 def pick() -> dict:
     names = get_symbol_name_map()
     raw = [
@@ -68,7 +83,12 @@ def annotate_risk_with_llm(candidates: list[dict]) -> list[dict]:
 
 
 def build_buy_candidates() -> dict:
+    rules = _load_decision_rules()
+    pos = rules.get("position", {})
+    max_total_pct = float(pos.get("max_total_pct", 0.6))
+
     stock_candidates = annotate_risk_with_llm(pick()["candidates"])
+    stock_candidates, dropped = _apply_total_cap(stock_candidates, max_total_pct)
     fc = forecast_all()
 
     sectors = []
@@ -112,6 +132,8 @@ def build_buy_candidates() -> dict:
     return {
         "date": "today",
         "stocks": stock_candidates,
+        "dropped_stocks_due_to_total_cap": dropped,
         "sectors": sectors,
         "market": market_plan,
+        "constraints": {"max_total_pct": max_total_pct},
     }
