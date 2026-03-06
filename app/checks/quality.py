@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 
 from app.core.data_manager import get_symbols
 from app.db.database import get_news_conn, get_tracking_conn
@@ -70,6 +70,24 @@ def _sector_coverage() -> dict:
     return {"status": "pass" if cov >= 0.9 else "warn", "detail": f"标的覆盖率={cov:.2%} ({rows}/{len(symbols)})"}
 
 
+def _data_freshness() -> dict:
+    with get_tracking_conn() as conn:
+        row = conn.execute("SELECT MAX(trade_date) FROM market_price_bars").fetchone()
+    latest = row[0] if row else None
+    if not latest:
+        return {"status": "warn", "detail": "无行情数据", "lag_days": None}
+    try:
+        d_latest = datetime.strptime(str(latest), "%Y-%m-%d").date()
+        lag = (date.today() - d_latest).days
+        return {
+            "status": "pass" if lag <= 1 else "warn",
+            "detail": f"latest_trade_date={latest}, lag_days={lag}",
+            "lag_days": lag,
+        }
+    except Exception:
+        return {"status": "warn", "detail": f"latest_trade_date={latest}, 日期格式异常", "lag_days": None}
+
+
 def run_data_quality_checks() -> dict:
     """5类数据质量检查（基于真实库状态）。"""
     with get_news_conn() as conn:
@@ -80,6 +98,7 @@ def run_data_quality_checks() -> dict:
         "data_health": _data_health(),
         "source_consistency": _source_consistency(),
         "sector_coverage": _sector_coverage(),
+        "data_freshness": _data_freshness(),
     }
     warn_count = sum(1 for v in checks.values() if v["status"] == "warn")
     return {

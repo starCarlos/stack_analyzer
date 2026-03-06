@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import json
 
 from fastapi import APIRouter
 from pydantic import BaseModel
@@ -27,9 +28,18 @@ def system_health() -> dict:
     latest_quality = get_latest_quality_check()
     latest_signal = get_latest_signal_pack()
     latest_archive = get_latest_archive_log()
+    freshness = {"status": "unknown", "detail": None}
+    if latest_quality and latest_quality.get("payload_json"):
+        try:
+            payload = json.loads(latest_quality["payload_json"])
+            f = (payload.get("checks", {}) or {}).get("data_freshness", {})
+            if isinstance(f, dict):
+                freshness = {"status": f.get("status", "unknown"), "detail": f.get("detail")}
+        except Exception:
+            pass
     return {
         "status": latest_run.get("status", "unknown") if latest_run else "no_run",
-        "data_freshness": "good" if latest_run else "unknown",
+        "data_freshness": freshness,
         "llm_status": "configured" if os.getenv("LLM_API_KEY") else "missing_key",
         "latest_run": {
             "run_date": latest_run.get("run_date") if latest_run else None,

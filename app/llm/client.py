@@ -5,9 +5,12 @@ import json
 import os
 import urllib.error
 import urllib.request
+from datetime import date
 from typing import Any
 
 from app.llm import cache
+
+_LLM_BUDGET_USAGE: dict[str, int] = {}
 
 
 def _endpoint() -> str:
@@ -33,6 +36,48 @@ def _default_system_prompt() -> str:
         "LLM_SYSTEM_PROMPT",
         "你是严谨的A股投研分析助手。请输出简洁、结构化、可执行的结论；若要求JSON则仅输出JSON。",
     )
+
+
+def _daily_budget_limit() -> int:
+    try:
+        return int(os.getenv("LLM_DAILY_BUDGET_TOKENS", "0") or 0)
+    except Exception:
+        return 0
+
+
+def _budget_day_key() -> str:
+    return str(date.today())
+
+
+def _estimate_tokens_from_obj(obj: Any) -> int:
+    try:
+        txt = json.dumps(obj, ensure_ascii=False)
+    except Exception:
+        txt = str(obj)
+    return max(1, len(txt) // 4)
+
+
+def _budget_used_today() -> int:
+    return int(_LLM_BUDGET_USAGE.get(_budget_day_key(), 0))
+
+
+def _budget_reserve(tokens: int) -> bool:
+    limit = _daily_budget_limit()
+    if limit <= 0:
+        return True
+    key = _budget_day_key()
+    used = int(_LLM_BUDGET_USAGE.get(key, 0))
+    if used + max(0, int(tokens)) > limit:
+        return False
+    _LLM_BUDGET_USAGE[key] = used + max(0, int(tokens))
+    return True
+
+
+def _budget_add(tokens: int) -> None:
+    if _daily_budget_limit() <= 0:
+        return
+    key = _budget_day_key()
+    _LLM_BUDGET_USAGE[key] = max(0, int(_LLM_BUDGET_USAGE.get(key, 0)) + int(tokens))
 
 
 def _build_messages(prompt: str | None, system: str | None, messages: list[dict] | None) -> list[dict]:
@@ -155,27 +200,47 @@ def chat(
         if hit:
             return dict(hit)
 
+    request_tokens = _estimate_tokens_from_obj(payload)
+    if not _budget_reserve(request_tokens):
+        limit = _daily_budget_limit()
+        used = _budget_used_today()
+        return {
+            "ok": False,
+            "error": "llm_daily_budget_exceeded",
+            "detail": f"used={used}, limit={limit}",
+            "content": "",
+            "source": "budget",
+            "budget_used": used,
+            "budget_limit": limit,
+        }
+
     timeout = int(os.getenv("LLM_TIMEOUT", "60")) if timeout is None else int(timeout)
     try:
         raw = _post_json(_endpoint(), payload, timeout=timeout)
         content = _extract_content_responses(raw) if style == "responses" else _extract_content_chat(raw)
+        response_tokens = _estimate_tokens_from_obj(content)
+        _budget_add(response_tokens)
         result = {
             "ok": True,
             "content": content,
             "raw": raw,
             "model": payload["model"],
             "source": f"remote:{style}",
+            "budget_used": _budget_used_today(),
+            "budget_limit": _daily_budget_limit(),
         }
         if use_cache:
             cache.set_(key, result)
         return result
     except urllib.error.HTTPError as exc:
+        _budget_add(-request_tokens)
         try:
             detail = exc.read().decode("utf-8")
         except Exception:  # noqa: BLE001
             detail = str(exc)
         return {"ok": False, "error": f"http_error:{exc.code}", "detail": detail, "content": "", "source": "error"}
     except Exception as exc:  # noqa: BLE001
+        _budget_add(-request_tokens)
         return {"ok": False, "error": str(exc), "content": "", "source": "error"}
 
 

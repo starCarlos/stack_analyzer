@@ -5,9 +5,9 @@ price:
   - 20
   method: ensemble
   weights:
-    momentum: 0.4
-    mean_reversion: 0.15
-    fundamental: 0.45
+    momentum: 0.4747
+    mean_reversion: 0.0968
+    fundamental: 0.4285
 sector:
   windows:
   - 10

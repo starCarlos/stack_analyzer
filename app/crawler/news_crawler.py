@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from datetime import datetime
 
 from app.db.database import get_news_conn
@@ -45,6 +46,9 @@ def _fetch_real_news(limit_per_symbol: int = 20) -> list[dict]:
 def crawl_today() -> dict:
     real_items = _fetch_real_news()
     use_mock = not real_items
+    allow_mock_fallback = os.getenv("ALLOW_MOCK_FALLBACK", "true").lower() == "true"
+    if use_mock and not allow_mock_fallback:
+        raise RuntimeError("新闻真实源获取失败，且 ALLOW_MOCK_FALLBACK=false，拒绝回退 mock")
     items = (
         [
             {"id": 1, "title": "央行释放流动性信号", "sentiment": "positive"},
@@ -102,6 +106,7 @@ def crawl_today() -> dict:
         "count": len(items),
         "items": items,
         "source": "mock" if use_mock else "akshare",
+        "status": "degraded" if use_mock else "ok",
     }
 
 

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import yaml
 
-from app.core import forecaster
+from app.core import evaluator, forecaster, paper_trader
 from app.core.data_manager import get_symbols
 from app.db.database import get_tracking_conn
 
@@ -53,11 +53,6 @@ def _business_dates(start_date: str, end_date: str) -> list[str]:
             out.append(str(d))
         d += timedelta(days=1)
     return out
-
-
-def _mock_actual_return(symbol: str, as_of: str, window_days: int) -> float:
-    seed = (sum(ord(c) for c in symbol) + int(as_of.replace("-", "")) + window_days * 37) % 1000
-    return round((seed / 1000 - 0.5) * 0.16, 4)  # -8% ~ +8%
 
 
 def learn_from_evaluations() -> dict:
@@ -199,7 +194,9 @@ def learn_from_history(start_date: str, end_date: str) -> dict:
                 ).fetchone()
                 if exists:
                     continue
-                actual = _mock_actual_return(r["symbol"], d, int(r["window_days"] or 5))
+                actual = evaluator.actual_return_from_bars(conn, r["symbol"], d, int(r["window_days"] or 5))
+                if actual is None:
+                    continue
                 pred_dir = r["predicted_direction"] or "flat"
                 actual_dir = "up" if actual > 0.002 else ("down" if actual < -0.002 else "flat")
                 direction_hit = 1 if pred_dir == actual_dir else 0
@@ -307,6 +304,8 @@ def rollback_param_changes(changes: list[dict], reason: str = "walk_forward_fail
 
 
 def build_daily_report() -> dict:
+    from app.checks.quality import run_data_quality_checks
+
     today = str(date.today())
     with get_tracking_conn() as conn:
         conn.row_factory = sqlite3.Row
@@ -343,6 +342,17 @@ def build_daily_report() -> dict:
             }
         )
 
+    quality = run_data_quality_checks()
+    checks = quality.get("checks", {}) if isinstance(quality, dict) else {}
+    freshness = checks.get("data_freshness", {}) if isinstance(checks, dict) else {}
+    total_checks = max(1, len(checks)) if isinstance(checks, dict) else 1
+    warn_count = int(quality.get("warn_count", 0) or 0) if isinstance(quality, dict) else 0
+    data_quality_score = round(max(0.0, (total_checks - warn_count) / total_checks), 4)
+    issues: list[str] = []
+    if freshness.get("status") == "warn":
+        issues.append(f"数据新鲜度告警: {freshness.get('detail', 'unknown')}")
+    paper_status = paper_trader.get_status()
+
     return {
         "date": today,
         "evaluations": {
@@ -351,8 +361,18 @@ def build_daily_report() -> dict:
             "hit_rate_month": _rate(180),
         },
         "param_changes": param_changes,
-        "paper_account": {"cumulative_return": 0.052, "max_drawdown": -0.031},
-        "system_health": {"data_quality": 0.95, "forecast_count": len(eval_rows), "issues": []},
+        "paper_account": {
+            "total_value": paper_status.get("total_value", 0.0),
+            "cash": paper_status.get("cash", 0.0),
+            "cumulative_return": paper_status.get("cumulative_return", 0.0),
+            "max_drawdown": paper_status.get("max_drawdown", 0.0),
+        },
+        "system_health": {
+            "data_quality": data_quality_score,
+            "forecast_count": len(eval_rows),
+            "issues": issues,
+            "data_freshness": freshness,
+        },
         "today_priorities": [
             {"level": "P0", "type": "risk", "action": "减仓", "target": "300750.SZ", "reason": "接近止损阈值，先降波动"},
             {"level": "P1", "type": "rebalance", "action": "调仓", "target": "汽车板块", "reason": "跨市场事件催化，板块强弱切换"},

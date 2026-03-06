@@ -29,7 +29,7 @@ def _get_close(conn: sqlite3.Connection, symbol: str, trade_date: str) -> float 
     return float(row2[0]) if row2 and row2[0] is not None else None
 
 
-def _actual_return_from_bars(conn: sqlite3.Connection, symbol: str, forecast_date: str, window_days: int) -> float | None:
+def actual_return_from_bars(conn: sqlite3.Connection, symbol: str, forecast_date: str, window_days: int) -> float | None:
     start_row = conn.execute(
         """
         SELECT trade_date, close
@@ -83,7 +83,7 @@ def evaluate_due_forecasts() -> dict:
             ).fetchone()
             if exists:
                 continue
-            actual = _actual_return_from_bars(conn, r["symbol"], r["forecast_date"], int(r["window_days"] or 5))
+            actual = actual_return_from_bars(conn, r["symbol"], r["forecast_date"], int(r["window_days"] or 5))
             if actual is None:
                 skipped_no_data += 1
                 continue

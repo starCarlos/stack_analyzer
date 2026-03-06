@@ -56,7 +56,8 @@ async def daily_pipeline() -> dict:
         # 3 抓取新闻
         news_result = run_step("crawl_news", "warn", news_crawler.crawl_today) or {"items": []}
         # 4 信号包+LLM打分
-        candidates_result = candidate_picker.pick()
+        candidate_pack = candidate_picker.build_buy_candidates()
+        candidates_result = {"candidates": candidate_pack.get("stocks", [])}
         signal_pack = run_step(
             "build_signal_pack",
             "critical",
@@ -107,16 +108,51 @@ async def daily_pipeline() -> dict:
             "candidate_pick_and_risk_annotate",
             "warn",
             lambda: {
-                "candidates": candidate_picker.annotate_risk_with_llm(candidates_result.get("candidates", [])),
+                "candidates": candidate_picker.annotate_risk_with_llm(candidate_pack.get("stocks", [])),
+                "dropped_stocks_due_to_total_cap": candidate_pack.get("dropped_stocks_due_to_total_cap", []),
+                "constraints": candidate_pack.get("constraints", {}),
             },
         ) or {"candidates": []}
         # 12 Advisor多角色分析
         advisor_results = run_step(
             "advisor_multi_role",
             "warn",
-            lambda: [advisor_panel.analyze(item["symbol"]) for item in enriched_candidates.get("candidates", [])[:3]],
+            lambda: [advisor_panel.analyze(item["symbol"]) for item in enriched_candidates.get("candidates", [])],
             enabled=_is_enabled("ENABLE_ADVISOR_PANEL", "true"),
         )
+        # 12.1 低一致性候选降级（回写步骤11结果）
+        if advisor_results and isinstance(advisor_results, list):
+            min_agreement = float(os.getenv("ADVISOR_MIN_AGREEMENT", "0.6"))
+            agree_map: dict[str, float] = {}
+            for item in advisor_results:
+                symbol = str(item.get("symbol", ""))
+                consensus = item.get("consensus", {}) if isinstance(item, dict) else {}
+                agreement = consensus.get("agreement")
+                if symbol and agreement is not None:
+                    try:
+                        agree_map[symbol] = float(agreement)
+                    except Exception:
+                        continue
+            kept: list[dict] = []
+            downgraded: list[dict] = []
+            for c in enriched_candidates.get("candidates", []):
+                symbol = str(c.get("symbol", ""))
+                agreement = agree_map.get(symbol)
+                if agreement is None:
+                    kept.append(c)
+                    continue
+                if agreement < min_agreement:
+                    dc = dict(c)
+                    dc["advisor_agreement"] = agreement
+                    dc["downgrade_reason"] = f"advisor_agreement<{min_agreement}"
+                    downgraded.append(dc)
+                else:
+                    kc = dict(c)
+                    kc["advisor_agreement"] = agreement
+                    kept.append(kc)
+            enriched_candidates["candidates"] = kept
+            enriched_candidates["downgraded_by_advisor"] = downgraded
+            enriched_candidates["advisor_min_agreement"] = min_agreement
         if signal_pack and advisor_results:
             dirs = [x.get("consensus", {}).get("direction") for x in advisor_results if x.get("consensus")]
             agreements = [x.get("consensus", {}).get("agreement") for x in advisor_results if x.get("consensus")]

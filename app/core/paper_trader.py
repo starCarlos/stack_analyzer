@@ -62,15 +62,63 @@ def execute_daily(candidates: list[dict] | None = None, current_prices: dict | N
     lot_size = int(a.get("lot_size", 100))
 
     st = _latest_snapshot()
+    initial_cash = float(__import__("os").getenv("PAPER_INITIAL_CASH", "1000000"))
     cash = float(st["cash"])
     positions = dict(st["positions"])
     total_value = float(st["total_value"]) if st["total_value"] > 0 else cash
     daily_budget = total_value * max_daily_buy
     used_budget = 0.0
     trades = []
+    sell_count = 0
+    buy_count = 0
     today = str(date.today())
 
     with get_tracking_conn() as conn:
+        # 1) 先处理卖出（止损/止盈）
+        stop_loss_pct = float(rules.get("stop_loss_pct", 0.08))
+        default_take_profit_pct = float(__import__("os").getenv("PAPER_TAKE_PROFIT_PCT", "0.12"))
+        candidate_map = {str(c.get("symbol")): c for c in candidates}
+        for symbol, p in list(positions.items()):
+            qty = int(p.get("qty", 0))
+            if qty <= 0:
+                continue
+            avg_cost = float(p.get("avg_cost", 0) or 0)
+            px = float(current_prices.get(symbol) or avg_cost)
+            if px <= 0 or avg_cost <= 0:
+                continue
+            take_profit_price = float(candidate_map.get(symbol, {}).get("take_profit_price") or (avg_cost * (1 + default_take_profit_pct)))
+            stop_loss_price = float(candidate_map.get(symbol, {}).get("stop_loss_price") or (avg_cost * (1 - stop_loss_pct)))
+            should_sell = px >= take_profit_price or px <= stop_loss_price
+            if not should_sell:
+                continue
+            gross = qty * px
+            commission = max(commission_min, gross * commission_rate)
+            stamp_tax = gross * stamp_tax_rate
+            received = gross - commission - stamp_tax
+            cash += received
+            reason = "take_profit" if px >= take_profit_price else "stop_loss"
+            trades.append(
+                {
+                    "symbol": symbol,
+                    "action": "sell",
+                    "quantity": qty,
+                    "price": px,
+                    "commission": commission,
+                    "stamp_tax": stamp_tax,
+                    "reason": reason,
+                }
+            )
+            sell_count += 1
+            conn.execute(
+                """
+                INSERT INTO paper_trades(symbol, trade_date, action, quantity, price, commission, stamp_tax, reason)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (symbol, today, "sell", qty, px, commission, stamp_tax, reason),
+            )
+            positions.pop(symbol, None)
+
+        # 2) 再处理买入
         for c in sorted(candidates, key=lambda x: float(x.get("confidence", 0)), reverse=True):
             symbol = str(c.get("symbol"))
             price = float(current_prices.get(symbol) or c.get("entry_price") or c.get("current_price") or 0)
@@ -94,6 +142,7 @@ def execute_daily(candidates: list[dict] | None = None, current_prices: dict | N
             new_cost = float(pos0.get("cost", 0.0)) + cost
             positions[symbol] = {"qty": new_qty, "cost": round(new_cost, 2), "avg_cost": round(new_cost / new_qty, 4)}
             trades.append({"symbol": symbol, "action": "buy", "quantity": qty, "price": price, "commission": commission, "stamp_tax": 0.0})
+            buy_count += 1
             conn.execute(
                 """
                 INSERT INTO paper_trades(symbol, trade_date, action, quantity, price, commission, stamp_tax, reason)
@@ -108,7 +157,7 @@ def execute_daily(candidates: list[dict] | None = None, current_prices: dict | N
             px = float(current_prices.get(symbol) or p.get("avg_cost", 0))
             market_value += int(p.get("qty", 0)) * px
         total_value_new = cash + market_value
-        cumulative_return = (total_value_new / 1_000_000 - 1) if 1_000_000 else 0.0
+        cumulative_return = (total_value_new / initial_cash - 1) if initial_cash else 0.0
         peak = max(total_value_new, st["total_value"] or total_value_new)
         dd = (total_value_new / peak - 1) if peak else 0.0
 
@@ -132,6 +181,8 @@ def execute_daily(candidates: list[dict] | None = None, current_prices: dict | N
     return {
         "executed": True,
         "trade_count": len(trades),
+        "buy_count": buy_count,
+        "sell_count": sell_count,
         "used_budget": round(used_budget, 2),
         "daily_budget": round(daily_budget, 2),
         "cash": round(cash, 2),
@@ -149,4 +200,3 @@ def get_status() -> dict:
         "cumulative_return": round(float(st["cumulative_return"]), 4),
         "max_drawdown": round(float(st["max_drawdown"]), 4),
     }
-
